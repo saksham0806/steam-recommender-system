@@ -13,16 +13,28 @@ class LibrarySyncService:
     """Service for synchronizing user's Steam library with database"""
     
     async def sync_user_profile(self, steam_id: str, db: Session) -> User:
-        """Sync user profile information from Steam"""
+        """
+        Sync user profile information from Steam
+        
+        Args:
+            steam_id: Steam 64-bit ID
+            db: Database session
+            
+        Returns:
+            User object
+        """
+        # Fetch profile data from Steam
         player_data = await steam_auth.get_player_summaries(steam_id)
         
         if not player_data:
+            # Create basic user without Steam API data
             user_data = {
                 'steam_id': int(steam_id),
                 'persona_name': f'User_{steam_id[:8]}',
                 'profile_url': f'https://steamcommunity.com/profiles/{steam_id}',
             }
         else:
+            # Parse Steam API response
             user_data = {
                 'steam_id': int(steam_id),
                 'persona_name': player_data.get('personaname', ''),
@@ -33,6 +45,7 @@ class LibrarySyncService:
                 'profile_visibility': player_data.get('communityvisibilitystate', 3),
             }
         
+        # Upsert user
         stmt = insert(User).values(**user_data)
         stmt = stmt.on_conflict_do_update(
             index_elements=['steam_id'],
@@ -55,24 +68,38 @@ class LibrarySyncService:
         return user
     
     async def sync_owned_games(self, steam_id: str, db: Session) -> dict:
-        """Sync user's owned games from Steam"""
+        """
+        Sync user's owned games from Steam
+        
+        Args:
+            steam_id: Steam 64-bit ID
+            db: Database session
+            
+        Returns:
+            Dict with sync statistics
+        """
+        # Fetch owned games from Steam
         games_data = await steam_auth.get_owned_games(steam_id)
         
         if not games_data:
             return {'games_added': 0, 'games_updated': 0, 'error': 'Could not fetch games'}
         
         steam_games = games_data.get('games', [])
+        
         games_added = 0
         games_updated = 0
         
+        # Process each game
         for game in steam_games:
             app_id = game.get('appid')
             playtime_forever = game.get('playtime_forever', 0)
             playtime_2weeks = game.get('playtime_2weeks')
             
+            # Check if game exists in our catalog
             game_exists = db.query(Game).filter(Game.id == app_id).first()
             
             if not game_exists:
+                # Create basic game entry
                 game_data = {
                     'id': app_id,
                     'name': game.get('name', f'Game_{app_id}'),
@@ -82,6 +109,7 @@ class LibrarySyncService:
                 db.add(Game(**game_data))
                 db.flush()
             
+            # Upsert user game
             user_game_data = {
                 'steam_id': int(steam_id),
                 'game_id': app_id,
@@ -105,6 +133,7 @@ class LibrarySyncService:
             else:
                 games_updated += 1
         
+        # Update user stats
         total_playtime = sum(g.get('playtime_forever', 0) for g in steam_games)
         user = db.query(User).filter(User.steam_id == int(steam_id)).first()
         if user:
@@ -112,6 +141,7 @@ class LibrarySyncService:
             user.total_playtime = total_playtime
         
         db.commit()
+        
         logger.info(f"Synced {len(steam_games)} games for Steam ID: {steam_id}")
         
         return {
@@ -121,7 +151,17 @@ class LibrarySyncService:
         }
     
     async def sync_wishlist(self, steam_id: str, db: Session) -> dict:
-        """Sync user's wishlist from Steam"""
+        """
+        Sync user's wishlist from Steam
+        
+        Args:
+            steam_id: Steam 64-bit ID
+            db: Database session
+            
+        Returns:
+            Dict with sync statistics
+        """
+        # Fetch wishlist
         wishlist_ids = await steam_auth.get_wishlist(steam_id)
         
         if wishlist_ids is None:
@@ -130,13 +170,18 @@ class LibrarySyncService:
         if not wishlist_ids:
             return {'wishlist_synced': 0, 'message': 'Wishlist is empty or private'}
         
+        # Clear existing wishlist
         db.query(UserWishlist).filter(UserWishlist.steam_id == int(steam_id)).delete()
+        
         wishlist_synced = 0
         
+        # Add wishlist items
         for app_id in wishlist_ids:
+            # Check if game exists in catalog
             game_exists = db.query(Game).filter(Game.id == app_id).first()
             
             if not game_exists:
+                # Create basic game entry
                 game_data = {
                     'id': app_id,
                     'name': f'Game_{app_id}',
@@ -146,6 +191,7 @@ class LibrarySyncService:
                 db.add(Game(**game_data))
                 db.flush()
             
+            # Add to wishlist
             wishlist_item = UserWishlist(
                 steam_id=int(steam_id),
                 game_id=app_id,
@@ -155,16 +201,33 @@ class LibrarySyncService:
             wishlist_synced += 1
         
         db.commit()
+        
         logger.info(f"Synced {wishlist_synced} wishlist items for Steam ID: {steam_id}")
         
-        return {'wishlist_synced': wishlist_synced}
+        return {
+            'wishlist_synced': wishlist_synced,
+        }
     
     async def full_sync(self, steam_id: str, db: Session) -> dict:
-        """Perform full sync: profile, games, and wishlist"""
+        """
+        Perform full sync: profile, games, and wishlist
+        
+        Args:
+            steam_id: Steam 64-bit ID
+            db: Database session
+            
+        Returns:
+            Dict with complete sync statistics
+        """
         logger.info(f"Starting full sync for Steam ID: {steam_id}")
         
+        # Sync profile
         user = await self.sync_user_profile(steam_id, db)
+        
+        # Sync owned games
         games_result = await self.sync_owned_games(steam_id, db)
+        
+        # Sync wishlist
         wishlist_result = await self.sync_wishlist(steam_id, db)
         
         result = {
@@ -179,7 +242,9 @@ class LibrarySyncService:
         }
         
         logger.info(f"Full sync completed for {user.persona_name}")
+        
         return result
 
 
+# Singleton instance
 library_sync_service = LibrarySyncService()
