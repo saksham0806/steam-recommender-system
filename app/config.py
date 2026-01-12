@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     
     # Data Collection Settings
     MAX_GAMES_TO_COLLECT: int = 20000
-    BATCH_SIZE: int = 50  # Reduced from 100 for safer saves
+    BATCH_SIZE: int = 75  # Reduced from 100 for safer saves
     REQUEST_DELAY: float = 1.5  # Increased to avoid rate limits
     MAX_RETRIES: int = 5  # More retries for resilience
     

@@ -2,7 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base
-from app.api.routes import games, auth, users, recommendations
+
+# Import routes directly (not from __init__)
+from app.api.routes.games import router as games_router
+from app.api.routes.auth import router as auth_router
+from app.api.routes.users import router as users_router
+from app.api.routes.recommendations import router as recommendations_router
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -25,10 +30,10 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(games.router, prefix="/api/v1", tags=["games"])
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
-app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
-app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["recommendations"])
+app.include_router(games_router, prefix="/api/v1", tags=["games"])
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["authentication"])
+app.include_router(users_router, prefix="/api/v1/users", tags=["users"])
+app.include_router(recommendations_router, prefix="/api/v1/recommendations", tags=["recommendations"])
 
 
 @app.get("/")

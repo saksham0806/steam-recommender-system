@@ -1,10 +1,3 @@
-"""
-Verify that recommendations include all game types, not just indie
-
-Usage:
-    python scripts/verify_all_games.py <steam_id>
-"""
-
 import sys
 import asyncio
 from pathlib import Path
