@@ -17,7 +17,7 @@ class RecommendationEngine:
         self.tag_weight = 0.45
         self.category_weight = 0.20
         self.wishlist_boost = 2.0
-        self.playtime_threshold = 60
+        self.playtime_threshold = 30
         self.min_playtime_fallback = 10
         
         # Diversity parameters
